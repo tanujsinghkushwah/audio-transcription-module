@@ -1,0 +1,9 @@
+__pycache__/
+*.wav
+keys.py
+.venv/
+
+transcripts/
+*.pt
+*.bin
+models/
