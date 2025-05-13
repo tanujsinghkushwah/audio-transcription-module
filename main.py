@@ -7,28 +7,58 @@ import sys
 import TranscriberModels
 import subprocess
 import signal
+import os
+import atexit
 
-def clear_context(transcriber, speaker_queue, mic_queue):
-    transcriber.clear_transcript_data()
+# Global variables for resources that need cleaning up
+transcriber = None
+user_audio_recorder = None
+speaker_audio_recorder = None
+running = True
 
-    with speaker_queue.mutex:
-        speaker_queue.queue.clear()
-    with mic_queue.mutex:
-        mic_queue.queue.clear()
+def cleanup():
+    print("\nCleaning up resources...")
+    global running, transcriber
+    running = False
+    if transcriber:
+        print("Clearing transcript data...")
+        try:
+            transcriber.clear_transcript_data()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+    print("Cleanup completed")
 
 def signal_handler(sig, frame):
-    print("\nExiting Ecoute...")
+    print(f"\nReceived signal {sig}, shutting down cleanly...")
+    cleanup()
     sys.exit(0)
 
+def register_signal_handlers():
+    # Register signal handlers for proper termination
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # On Windows, CTRL_C_EVENT and CTRL_BREAK_EVENT are not usable directly
+    # as they cause ValueError exceptions with signal.signal
+    if sys.platform == 'win32':
+        # Skip registering Windows-specific control signals as they're not
+        # properly supported in Python's signal module in this context
+        pass
+    
+    # Register atexit handler as a fallback
+    atexit.register(cleanup)
+
 def main():
+    global transcriber, user_audio_recorder, speaker_audio_recorder, running
+
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except FileNotFoundError:
         print("ERROR: The ffmpeg library is not installed. Please install ffmpeg and try again.")
         return
 
-    # Register signal handler for graceful exit
-    signal.signal(signal.SIGINT, signal_handler)
+    # Register all signal handlers for clean termination
+    register_signal_handlers()
 
     speaker_queue = queue.Queue()
     mic_queue = queue.Queue()
@@ -54,12 +84,15 @@ def main():
     print("Transcripts are being saved to the 'transcripts' folder")
     print("Press Ctrl+C to exit")
     
-    # Keep the main thread alive
+    # Keep the main thread alive with better detection of program termination
     try:
-        while True:
+        while running:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nExiting Ecoute...")
+        print("\nKeyboardInterrupt received, exiting...")
+    finally:
+        # Ensure cleanup happens
+        cleanup()
 
 if __name__ == "__main__":
     main()

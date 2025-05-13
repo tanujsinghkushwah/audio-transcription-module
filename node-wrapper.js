@@ -147,13 +147,40 @@ class AudioTranscriptionWrapper {
       
       // Kill the Python process
       if (this.pythonProcess) {
-        // Try to send a graceful stop signal (SIGINT) first
+        console.log('Sending termination signal to Python process (PID:', this.pythonProcess.pid, ')');
+        
+        // Try to send a graceful stop signal first
         if (process.platform === 'win32') {
-          // On Windows, we need to use taskkill
-          spawn('taskkill', ['/pid', this.pythonProcess.pid, '/f', '/t']);
+          // On Windows, we need to use taskkill with /F and /T flags to force termination and kill child processes
+          try {
+            const { spawnSync } = require('child_process');
+            console.log('Using taskkill to forcefully terminate process tree');
+            const result = spawnSync('taskkill', ['/pid', this.pythonProcess.pid, '/f', '/t']);
+            console.log('Taskkill result:', result.status === 0 ? 'SUCCESS' : 'FAILED');
+          } catch (killError) {
+            console.error('Error using taskkill:', killError);
+            // Fallback - try regular kill in case taskkill failed
+            try {
+              this.pythonProcess.kill();
+            } catch (err) {
+              console.error('Failed to kill Python process with regular method:', err);
+            }
+          }
         } else {
           // On Unix-like systems
           this.pythonProcess.kill('SIGINT');
+          
+          // Give it 500ms to respond to SIGINT, then force kill if still running
+          setTimeout(() => {
+            try {
+              if (this.pythonProcess) {
+                console.log('Process still running after SIGINT, sending SIGKILL');
+                this.pythonProcess.kill('SIGKILL');
+              }
+            } catch (err) {
+              // Ignore error during force kill
+            }
+          }, 500);
         }
         
         this.pythonProcess = null;
@@ -165,6 +192,8 @@ class AudioTranscriptionWrapper {
       return true;
     } catch (error) {
       console.error('Error stopping audio transcription:', error);
+      this.isRunning = false; // Force set to false even on error
+      this.pythonProcess = null;
       return false;
     }
   }
