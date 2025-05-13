@@ -1,5 +1,6 @@
 import threading
 from AudioTranscriber import AudioTranscriber
+import AudioRecorder
 import queue
 import time
 import sys
@@ -61,5 +62,4 @@ def main():
         print("\nExiting Ecoute...")
 
 if __name__ == "__main__":
-    import AudioRecorder
     main()
