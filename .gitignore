@@ -7,3 +7,5 @@ transcripts/
 *.pt
 *.bin
 models/
+
+.DS_Store
