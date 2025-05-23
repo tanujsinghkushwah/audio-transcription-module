@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import threading
 from AudioTranscriber import AudioTranscriber
 import AudioRecorder
@@ -9,6 +11,7 @@ import subprocess
 import signal
 import os
 import atexit
+import platform
 
 # Global variables for resources that need cleaning up
 transcriber = None
@@ -48,9 +51,77 @@ def register_signal_handlers():
     # Register atexit handler as a fallback
     atexit.register(cleanup)
 
-def main():
-    global transcriber, user_audio_recorder, speaker_audio_recorder, running
+# Add macOS permission checking
+def check_macos_permissions():
+    """Check and request microphone permissions on macOS"""
+    if platform.system() != 'Darwin':
+        return True
+    
+    try:
+        # Try to import and use a simple audio test
+        import pyaudio
+        
+        # Test if we can access the audio system
+        p = pyaudio.PyAudio()
+        
+        # Try to get default input device info
+        try:
+            default_input = p.get_default_input_device_info()
+            print(f"[INFO] Default input device: {default_input['name']}")
+            
+            # Try to create a test stream
+            try:
+                test_stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=44100,
+                    input=True,
+                    frames_per_buffer=1024
+                )
+                test_stream.close()
+                p.terminate()
+                print("[INFO] ✅ Microphone access confirmed")
+                return True
+            except Exception as stream_error:
+                print(f"[ERROR] ❌ Cannot create audio stream: {stream_error}")
+                p.terminate()
+                return False
+                
+        except Exception as device_error:
+            print(f"[ERROR] ❌ Cannot access input device: {device_error}")
+            p.terminate()
+            return False
+            
+    except Exception as e:
+        print(f"[ERROR] ❌ Audio system access failed: {e}")
+        print("[INFO] 🔧 Please grant microphone permissions in System Preferences > Security & Privacy > Privacy > Microphone")
+        return False
 
+def main():
+    print("=== Interview Genie Audio Transcription Module ===")
+    print(f"Platform: {platform.system()} {platform.release()}")
+    print(f"Python: {sys.version}")
+    
+    # Check macOS permissions first
+    if not check_macos_permissions():
+        print("\n❌ CRITICAL: Microphone access denied or unavailable")
+        print("🔧 SOLUTION:")
+        print("1. Open System Preferences > Security & Privacy > Privacy")
+        print("2. Select 'Microphone' from the left panel")
+        print("3. Check the box next to 'Electron' or your app name")
+        print("4. Restart the application")
+        print("\nPress Ctrl+C to exit...")
+        
+        # Keep the process alive but in a failed state
+        try:
+            while True:
+                time.sleep(10)
+                print("⚠️  Still waiting for microphone permissions...")
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            sys.exit(1)
+    
+    # Continue with original main.py logic
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except FileNotFoundError:

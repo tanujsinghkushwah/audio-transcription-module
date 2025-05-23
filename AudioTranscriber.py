@@ -21,17 +21,9 @@ class AudioTranscriber:
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
         
-        # Determine the correct transcript directory path
-        # In development, use src/transcripts/, in production use appropriate path
-        if os.path.exists(os.path.join('..', 'src', 'transcripts')):
-            # Development environment - audio module is run from audio-transcription-module/
-            self.transcript_dir = os.path.join('..', 'src', 'transcripts')
-        elif os.path.exists(os.path.join('src', 'transcripts')):
-            # Alternative development setup
-            self.transcript_dir = os.path.join('src', 'transcripts')
-        else:
-            # Use the provided transcript_dir parameter (fallback)
-            self.transcript_dir = transcript_dir
+        # Use the local transcript directory within audio-transcription-module
+        # This ensures the main app can monitor the correct location
+        self.transcript_dir = transcript_dir
         
         # Ensure transcript directory exists
         if not os.path.exists(self.transcript_dir):
@@ -40,10 +32,12 @@ class AudioTranscriber:
                 print(f"[INFO] Created transcript directory: {self.transcript_dir}")
             except Exception as e:
                 print(f"[WARN] Could not create transcript directory {self.transcript_dir}: {e}")
-                # Fallback to current directory
+                # Fallback to current directory with transcripts subfolder
                 self.transcript_dir = 'transcripts'
                 if not os.path.exists(self.transcript_dir):
                     os.makedirs(self.transcript_dir, exist_ok=True)
+        
+        print(f"[INFO] Using transcript directory: {os.path.abspath(self.transcript_dir)}")
                 
         self.transcript_file = None
         self.transcript_file_path = None
