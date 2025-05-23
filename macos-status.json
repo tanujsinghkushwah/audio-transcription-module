@@ -1,0 +1,11 @@
+{
+  "platform": "macOS",
+  "pathContainsSpaces": true,
+  "pathCheckTimestamp": "2025-05-23T06:16:06.437Z",
+  "recommendations": [
+    "Ensure Python 3.7+ is installed via python.org or Homebrew",
+    "Install required packages: pip install -r requirements.txt",
+    "If path contains spaces, consider moving app to /Applications/",
+    "Grant microphone permissions in System Preferences > Privacy"
+  ]
+}

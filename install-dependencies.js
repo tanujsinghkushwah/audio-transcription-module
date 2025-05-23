@@ -18,150 +18,252 @@ const REQUIREMENTS_FILE = path.join(CURRENT_DIR, 'requirements.txt');
  */
 async function checkPython() {
   try {
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-    const result = execSync(`${pythonCmd} --version`, { encoding: 'utf8' });
-    console.log(`Python version: ${result.trim()}`);
+    const pythonCmds = ['python3', 'python'];
+    let pythonFound = false;
+    
+    for (const pythonCmd of pythonCmds) {
+      try {
+        const result = execSync(`${pythonCmd} --version`, { 
+          encoding: 'utf8',
+          timeout: 5000,
+          stdio: ['ignore', 'pipe', 'ignore']
+        });
+        console.log(`[AudioDeps] Python version: ${result.trim()}`);
+        pythonFound = true;
+        break;
+      } catch (cmdError) {
+        // Try next command
+        continue;
+      }
+    }
+    
+    if (!pythonFound) {
+      console.error('[AudioDeps] Python not found with any common command');
+      return false;
+    }
+    
     return true;
   } catch (error) {
-    console.error('Python not found:', error.message);
+    console.error('[AudioDeps] Python not found:', error.message);
     return false;
   }
 }
 
 /**
- * Check if pip is installed
- * @returns {Promise<boolean>} True if pip is installed
+ * Get the best Python executable
+ * @returns {string} Python command to use
+ */
+function getPythonCommand() {
+  const pythonCmds = ['python3', 'python'];
+  
+  for (const pythonCmd of pythonCmds) {
+    try {
+      execSync(`${pythonCmd} --version`, { 
+        encoding: 'utf8',
+        timeout: 3000,
+        stdio: ['ignore', 'pipe', 'ignore']
+      });
+      return pythonCmd;
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  return 'python'; // Fallback
+}
+
+/**
+ * Check if pip is available
+ * @returns {Promise<boolean>} True if pip is available
  */
 async function checkPip() {
   try {
-    const pipCmd = process.platform === 'win32' ? 'pip' : 'pip3';
-    const result = execSync(`${pipCmd} --version`, { encoding: 'utf8' });
-    console.log(`Pip version: ${result.trim()}`);
+    const pythonCmd = getPythonCommand();
+    const result = execSync(`${pythonCmd} -m pip --version`, { 
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    console.log(`[AudioDeps] Pip version: ${result.trim()}`);
     return true;
   } catch (error) {
-    console.error('Pip not found:', error.message);
+    console.error('[AudioDeps] Pip not available:', error.message);
     return false;
   }
 }
 
 /**
- * Install required packages using pip
+ * Install Python dependencies from requirements.txt
  * @returns {Promise<boolean>} True if installation successful
  */
 async function installDependencies() {
-  return new Promise((resolve, reject) => {
+  try {
     if (!fs.existsSync(REQUIREMENTS_FILE)) {
-      console.error(`Requirements file not found: ${REQUIREMENTS_FILE}`);
-      return resolve(false);
+      console.error('[AudioDeps] Requirements file not found:', REQUIREMENTS_FILE);
+      return false;
     }
     
-    console.log(`Installing dependencies from ${REQUIREMENTS_FILE}...`);
+    const pythonCmd = getPythonCommand();
+    console.log('[AudioDeps] Installing Python dependencies...');
     
-    const pipCmd = process.platform === 'win32' ? 'pip' : 'pip3';
-    const pipArgs = ['install', '-r', REQUIREMENTS_FILE];
+    // Use pip install with user flag to avoid permission issues
+    // Quote the requirements file path to handle spaces
+    const quotedRequirementsFile = process.platform === 'win32' ? `"${REQUIREMENTS_FILE}"` : `'${REQUIREMENTS_FILE}'`;
+    const installCmd = `${pythonCmd} -m pip install --user --no-warn-script-location -r ${quotedRequirementsFile}`;
     
-    // Add --user flag if not running as administrator (on Windows only)
-    if (process.platform === 'win32' && !isRunningAsAdmin()) {
-      pipArgs.push('--user');
-    }
+    console.log(`[AudioDeps] Running: ${installCmd}`);
     
-    console.log(`Running: ${pipCmd} ${pipArgs.join(' ')}`);
-    
-    const pythonProcess = spawn(pipCmd, pipArgs, {
+    const result = execSync(installCmd, { 
+      encoding: 'utf8',
+      timeout: 120000, // 2 minutes timeout
       cwd: CURRENT_DIR,
-      shell: true,
-      stdio: 'pipe' // Capture output
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: true // Use shell to handle quoted paths properly
     });
     
-    let stdout = '';
-    let stderr = '';
-    
-    pythonProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      stdout += output;
-      console.log(output);
-    });
-    
-    pythonProcess.stderr.on('data', (data) => {
-      const output = data.toString();
-      stderr += output;
-      console.error(output);
-    });
-    
-    pythonProcess.on('close', (code) => {
-      if (code === 0) {
-        console.log('Dependencies installed successfully');
-        resolve(true);
-      } else {
-        console.error(`Dependencies installation failed with code ${code}`);
-        console.error(stderr);
-        resolve(false);
-      }
-    });
-    
-    pythonProcess.on('error', (err) => {
-      console.error('Dependencies installation error:', err);
-      resolve(false);
-    });
-  });
-}
-
-/**
- * Check if running as administrator on Windows
- * @returns {boolean} True if running as admin
- */
-function isRunningAsAdmin() {
-  if (process.platform !== 'win32') {
-    return false;
-  }
-  
-  try {
-    // This command will succeed if running as admin and fail otherwise
-    execSync('net session', { stdio: 'ignore' });
+    console.log('[AudioDeps] Dependencies installed successfully');
+    console.log('[AudioDeps] Install output:', result);
     return true;
-  } catch (e) {
+  } catch (error) {
+    console.error('[AudioDeps] Error installing dependencies:', error.message);
+    if (error.stdout) {
+      console.log('[AudioDeps] Install stdout:', error.stdout);
+    }
+    if (error.stderr) {
+      console.error('[AudioDeps] Install stderr:', error.stderr);
+    }
     return false;
   }
 }
 
 /**
- * Main function to run all checks and installations
+ * Check if specific Python packages are installed
+ * @param {Array<string>} packages - List of package names to check
+ * @returns {Promise<object>} Object with package availability status
  */
-async function main() {
+async function checkPackages(packages = []) {
   try {
-    console.log('Checking Python and dependencies...');
+    const pythonCmd = getPythonCommand();
+    const results = {};
     
-    const pythonInstalled = await checkPython();
-    if (!pythonInstalled) {
-      console.error('Python is not installed or not in PATH');
-      return false;
+    for (const pkg of packages) {
+      try {
+        execSync(`${pythonCmd} -c "import ${pkg}"`, { 
+          encoding: 'utf8',
+          timeout: 5000,
+          stdio: ['ignore', 'pipe', 'ignore']
+        });
+        results[pkg] = true;
+        console.log(`[AudioDeps] Package ${pkg}: ✓ available`);
+      } catch (error) {
+        results[pkg] = false;
+        console.log(`[AudioDeps] Package ${pkg}: ✗ missing`);
+      }
     }
     
-    const pipInstalled = await checkPip();
-    if (!pipInstalled) {
-      console.error('Pip is not installed or not in PATH');
-      return false;
-    }
-    
-    // Install dependencies
-    const installed = await installDependencies();
-    return installed;
+    return results;
   } catch (error) {
-    console.error('Error checking dependencies:', error);
+    console.error('[AudioDeps] Error checking packages:', error.message);
+    return {};
+  }
+}
+
+/**
+ * Check all dependencies and install if needed
+ * @returns {Promise<boolean>} True if all dependencies are available
+ */
+async function checkDependencies() {
+  try {
+    console.log('[AudioDeps] Checking Python environment...');
+    
+    // Check if Python is available
+    const pythonAvailable = await checkPython();
+    if (!pythonAvailable) {
+      console.error('[AudioDeps] Python is not available. Please install Python 3.7+ to use audio features.');
+      return false;
+    }
+    
+    // Check if pip is available
+    const pipAvailable = await checkPip();
+    if (!pipAvailable) {
+      console.error('[AudioDeps] Pip is not available. Please install pip to manage Python packages.');
+      return false;
+    }
+    
+    // Check critical packages
+    const criticalPackages = ['numpy', 'torch', 'wave'];
+    const packageStatus = await checkPackages(criticalPackages);
+    
+    const missingPackages = Object.entries(packageStatus)
+      .filter(([pkg, available]) => !available)
+      .map(([pkg, available]) => pkg);
+    
+    if (missingPackages.length > 0) {
+      console.log(`[AudioDeps] Missing packages: ${missingPackages.join(', ')}`);
+      
+      // Try to install missing dependencies
+      console.log('[AudioDeps] Attempting to install missing dependencies...');
+      const installSuccess = await installDependencies();
+      
+      if (!installSuccess) {
+        console.error('[AudioDeps] Failed to install dependencies automatically.');
+        console.error('[AudioDeps] Please run: pip install -r requirements.txt manually in the audio-transcription-module directory.');
+        return false;
+      }
+      
+      // Re-check packages after installation
+      const reCheckStatus = await checkPackages(criticalPackages);
+      const stillMissing = Object.entries(reCheckStatus)
+        .filter(([pkg, available]) => !available)
+        .map(([pkg, available]) => pkg);
+        
+      if (stillMissing.length > 0) {
+        console.error(`[AudioDeps] Still missing packages after installation: ${stillMissing.join(', ')}`);
+        return false;
+      }
+    }
+    
+    console.log('[AudioDeps] All Python dependencies are available');
+    return true;
+  } catch (error) {
+    console.error('[AudioDeps] Error checking dependencies:', error.message);
     return false;
   }
 }
 
-// Export functions for use in other modules
+/**
+ * Quick check if basic environment is ready
+ * @returns {Promise<boolean>} True if basic environment is ready
+ */
+async function quickCheck() {
+  try {
+    const pythonAvailable = await checkPython();
+    if (!pythonAvailable) {
+      return false;
+    }
+    
+    // Quick check for numpy (most critical dependency)
+    const packageStatus = await checkPackages(['numpy']);
+    return packageStatus.numpy === true;
+  } catch (error) {
+    console.error('[AudioDeps] Error in quick check:', error.message);
+    return false;
+  }
+}
+
 module.exports = {
-  checkDependencies: main,
+  checkPython,
+  checkPip,
   installDependencies,
-  CURRENT_DIR
+  checkPackages,
+  checkDependencies,
+  quickCheck,
+  getPythonCommand
 };
 
 // Run main function if called directly
 if (require.main === module) {
-  main().then((success) => {
+  checkDependencies().then((success) => {
     console.log(`Dependencies check ${success ? 'successful' : 'failed'}`);
     process.exit(success ? 0 : 1);
   });

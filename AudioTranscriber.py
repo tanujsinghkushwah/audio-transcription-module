@@ -5,7 +5,11 @@ import tempfile
 import custom_speech_recognition as sr
 import io
 from datetime import timedelta, datetime
-import pyaudiowpatch as pyaudio
+try:
+    import pyaudiowpatch as pyaudio
+except ImportError:
+    # Fallback to standard pyaudio if pyaudiowpatch is not available
+    import pyaudio
 from heapq import merge
 
 PHRASE_TIMEOUT = 3.05
@@ -16,14 +20,34 @@ class AudioTranscriber:
         self.transcript_data = {"You": [], "Speaker": []}
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
-        self.transcript_dir = transcript_dir
+        
+        # Determine the correct transcript directory path
+        # In development, use src/transcripts/, in production use appropriate path
+        if os.path.exists(os.path.join('..', 'src', 'transcripts')):
+            # Development environment - audio module is run from audio-transcription-module/
+            self.transcript_dir = os.path.join('..', 'src', 'transcripts')
+        elif os.path.exists(os.path.join('src', 'transcripts')):
+            # Alternative development setup
+            self.transcript_dir = os.path.join('src', 'transcripts')
+        else:
+            # Use the provided transcript_dir parameter (fallback)
+            self.transcript_dir = transcript_dir
+        
+        # Ensure transcript directory exists
+        if not os.path.exists(self.transcript_dir):
+            try:
+                os.makedirs(self.transcript_dir, exist_ok=True)
+                print(f"[INFO] Created transcript directory: {self.transcript_dir}")
+            except Exception as e:
+                print(f"[WARN] Could not create transcript directory {self.transcript_dir}: {e}")
+                # Fallback to current directory
+                self.transcript_dir = 'transcripts'
+                if not os.path.exists(self.transcript_dir):
+                    os.makedirs(self.transcript_dir, exist_ok=True)
+                
         self.transcript_file = None
         self.transcript_file_path = None
         
-        # Ensure transcript directory exists
-        if not os.path.exists(transcript_dir):
-            os.makedirs(transcript_dir)
-            
         # Create a new transcript file with timestamp
         self.create_new_transcript_file()
         
