@@ -9,3 +9,8 @@ transcripts/
 models/
 
 .DS_Store
+
+# Auto-generated status files
+startup_status.json
+module_status.json
+audio_status.json

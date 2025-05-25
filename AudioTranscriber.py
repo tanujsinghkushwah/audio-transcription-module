@@ -49,7 +49,7 @@ class AudioTranscriber:
             "You": {
                 "sample_rate": mic_source.SAMPLE_RATE,
                 "sample_width": mic_source.SAMPLE_WIDTH,
-                "channels": mic_source.channels,
+                "channels": mic_source.channels if hasattr(mic_source, 'channels') else 1,
                 "last_sample": bytes(),
                 "last_spoken": None,
                 "new_phrase": True,
@@ -58,7 +58,7 @@ class AudioTranscriber:
             "Speaker": {
                 "sample_rate": speaker_source.SAMPLE_RATE,
                 "sample_width": speaker_source.SAMPLE_WIDTH,
-                "channels": speaker_source.channels,
+                "channels": speaker_source.channels if hasattr(speaker_source, 'channels') else 2,
                 "last_sample": bytes(),
                 "last_spoken": None,
                 "new_phrase": True,
