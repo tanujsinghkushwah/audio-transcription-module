@@ -1,0 +1,27 @@
+# Audio Transcription System - Python Dependencies
+# Core audio processing
+pyaudio>=0.2.11
+SpeechRecognition>=3.10.0
+
+# macOS specific dependencies for audio access
+pyobjc-framework-CoreAudio>=9.0; sys_platform == "darwin"
+pyobjc-framework-AVFoundation>=9.0; sys_platform == "darwin"
+pyobjc-framework-Cocoa>=9.0; sys_platform == "darwin"
+
+# Audio format support
+wave>=0.0.2
+
+# System utilities (usually built-in, but included for completeness)
+threading
+queue
+tempfile
+json
+time
+datetime
+os
+sys
+pathlib
+
+# Optional: Enhanced audio processing
+numpy>=1.21.0
+scipy>=1.7.0 

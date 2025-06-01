@@ -1,0 +1,78 @@
+{
+  "name": "@interview-genie/audio-transcription-system",
+  "version": "2.0.0",
+  "description": "Enhanced Audio Transcription System with Node.js wrapper for reliable production deployment",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "npm run test:dependencies && npm run test:integration",
+    "test:dependencies": "node scripts/test-dependencies.js",
+    "test:integration": "node scripts/test-integration.js",
+    "install:python-deps": "node scripts/install-python-deps.js",
+    "diagnostics": "node scripts/diagnostics.js",
+    "setup": "npm run install:python-deps",
+    "clean": "node scripts/clean.js"
+  },
+  "dependencies": {
+    "events": "^3.3.0"
+  },
+  "devDependencies": {},
+  "peerDependencies": {
+    "electron": ">=13.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/interview-genie/audio-transcription-system.git"
+  },
+  "keywords": [
+    "audio",
+    "transcription",
+    "speech-recognition",
+    "interview",
+    "real-time",
+    "python",
+    "nodejs",
+    "electron"
+  ],
+  "author": "Interview Genie Team",
+  "license": "PROPRIETARY",
+  "files": [
+    "src/",
+    "python/",
+    "runtime/",
+    "scripts/",
+    "README.md",
+    "package.json"
+  ],
+  "python": {
+    "requirements": [
+      "pyaudio>=0.2.11",
+      "SpeechRecognition>=3.10.0",
+      "pyobjc-framework-CoreAudio>=9.0; sys_platform == 'darwin'",
+      "pyobjc-framework-AVFoundation>=9.0; sys_platform == 'darwin'"
+    ],
+    "version": ">=3.8"
+  },
+  "config": {
+    "transcriptDirectory": "transcripts",
+    "monitorInterval": 500,
+    "maxRestartAttempts": 3,
+    "processTimeout": 30000,
+    "debug": false
+  },
+  "bundledDependencies": [],
+  "optionalDependencies": {},
+  "os": [
+    "darwin",
+    "win32",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+} 

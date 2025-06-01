@@ -1,5 +1,12 @@
-import wave
+import sys
 import os
+
+# Add parent directory to Python path to find custom_speech_recognition module
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+import wave
 import threading
 import tempfile
 import custom_speech_recognition as sr
@@ -16,13 +23,13 @@ PHRASE_TIMEOUT = 3.05
 MAX_PHRASES = 10
 
 class AudioTranscriber:
-    def __init__(self, mic_source, speaker_source, model, transcript_dir='transcripts'):
+    def __init__(self, mic_source, speaker_source, model, transcript_dir='../transcripts'):
         self.transcript_data = {"You": [], "Speaker": []}
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
         
-        # Use the local transcript directory within audio-transcription-module
-        # This ensures the main app can monitor the correct location
+        # Use the parent directory's transcript directory (audio-transcription-module/transcripts)
+        # This ensures the main app can monitor the correct location matching PathManager
         self.transcript_dir = transcript_dir
         
         # Ensure transcript directory exists

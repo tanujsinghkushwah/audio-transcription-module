@@ -1,3 +1,11 @@
+import sys
+import os
+
+# Add parent directory to Python path to find custom_speech_recognition module
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 import custom_speech_recognition as sr
 try:
     import pyaudiowpatch as pyaudio
@@ -7,8 +15,6 @@ except ImportError:
 from datetime import datetime
 import threading
 import time
-import sys
-import os
 
 RECORD_TIMEOUT = 3
 ENERGY_THRESHOLD = 300

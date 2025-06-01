@@ -12,6 +12,11 @@ import time
 from datetime import datetime
 import os
 
+# Add parent directory to Python path to find custom_speech_recognition module
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
