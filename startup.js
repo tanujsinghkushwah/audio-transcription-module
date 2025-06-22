@@ -20,6 +20,15 @@ async function initialize() {
   try {
     logger.log('[AudioTranscription] Initializing audio transcription module...');
     
+    // Check if audio dependency checks are enabled
+    const checksEnabled = process.env.AUDIO_DEPENDENCY_CHECKS_ENABLED !== 'false';
+    
+    if (!checksEnabled) {
+      logger.log('[AudioTranscription] Audio dependency checks disabled, skipping Python and dependency verification for faster startup');
+      logger.log('[AudioTranscription] Initialization complete.');
+      return true;
+    }
+    
     // Check if Python is available
     const pythonAvailable = await pythonRunner.checkPythonAvailable();
     if (!pythonAvailable) {
