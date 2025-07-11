@@ -12,6 +12,7 @@ import signal
 import os
 import atexit
 import platform
+import argparse
 
 # Global variables for resources that need cleaning up
 transcriber = None
@@ -102,6 +103,12 @@ def main():
     print(f"Platform: {platform.system()} {platform.release()}")
     print(f"Python: {sys.version}")
     
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Audio Transcription Module')
+    parser.add_argument('--transcripts-dir', type=str, default='transcripts', help='Directory to save transcripts')
+    parser.add_argument('--transcript-file', type=str, default=None, help='Specific file path for the transcript')
+    args = parser.parse_args()
+    
     # Check macOS permissions first
     if not check_macos_permissions():
         print("\n❌ CRITICAL: Microphone access denied or unavailable")
@@ -146,7 +153,7 @@ def main():
     model = TranscriberModels.get_model('--api' in sys.argv)
 
     print("Starting transcription...")
-    transcriber = AudioTranscriber(user_audio_recorder.source, speaker_audio_recorder.source, model)
+    transcriber = AudioTranscriber(user_audio_recorder.source, speaker_audio_recorder.source, model, transcript_dir=args.transcripts_dir, transcript_file=args.transcript_file)
     transcribe = threading.Thread(target=transcriber.transcribe_audio_queue, args=(speaker_queue, mic_queue))
     transcribe.daemon = True
     transcribe.start()
