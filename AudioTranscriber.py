@@ -64,10 +64,37 @@ class AudioTranscriber:
         }
 
     def create_new_transcript_file(self):
-        """Create a new transcript file with timestamp in the filename"""
+        """Create or reuse existing transcript file to maintain single file per session"""
+        # CRITICAL FIX: Check for existing recent session files first
+        import glob
+        import os
+        from datetime import datetime, timedelta
+        
+        # Look for existing conversation transcript files in the directory
+        pattern = os.path.join(self.transcript_dir, "conversation-transcript-*.txt")
+        existing_files = glob.glob(pattern)
+        
+        # Sort by modification time (newest first)
+        if existing_files:
+            existing_files = [(f, os.path.getmtime(f)) for f in existing_files]
+            existing_files.sort(key=lambda x: x[1], reverse=True)
+            
+            # Check if the most recent file is from current session (modified within last 30 minutes)
+            if existing_files:
+                latest_file, latest_mtime = existing_files[0]
+                file_age = datetime.now().timestamp() - latest_mtime
+                
+                if file_age < 1800:  # 30 minutes in seconds
+                    self.transcript_file_path = latest_file
+                    print(f"[INFO] Reusing existing session transcript file: {self.transcript_file_path} (age: {int(file_age)}s)")
+                    return
+                else:
+                    print(f"[INFO] Found old transcript file but it's too old ({int(file_age)}s), creating new session file")
+        
+        # No suitable existing file found, create a new one
         timestamp = datetime.now().isoformat(timespec='seconds').replace(':', '-')
         self.transcript_file_path = os.path.join(self.transcript_dir, f"conversation-transcript-{timestamp}.txt")
-        print(f"Saving transcript to: {self.transcript_file_path}")
+        print(f"[INFO] Creating new session transcript file: {self.transcript_file_path}")
         
         # Create an empty file
         with open(self.transcript_file_path, 'w') as f:
