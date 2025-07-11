@@ -12,11 +12,11 @@ except ImportError:
     import pyaudio
 from heapq import merge
 
-PHRASE_TIMEOUT = 3.05
+PHRASE_TIMEOUT = 4.0
 MAX_PHRASES = 10
 
 class AudioTranscriber:
-    def __init__(self, mic_source, speaker_source, model, transcript_dir='transcripts'):
+    def __init__(self, mic_source, speaker_source, model, transcript_dir='transcripts', transcript_file=None):
         self.transcript_data = {"You": [], "Speaker": []}
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
@@ -32,18 +32,15 @@ class AudioTranscriber:
                 print(f"[INFO] Created transcript directory: {self.transcript_dir}")
             except Exception as e:
                 print(f"[WARN] Could not create transcript directory {self.transcript_dir}: {e}")
-                # Fallback to current directory with transcripts subfolder
-                self.transcript_dir = 'transcripts'
-                if not os.path.exists(self.transcript_dir):
-                    os.makedirs(self.transcript_dir, exist_ok=True)
+                # Removed fallback to force using passed directory
         
         print(f"[INFO] Using transcript directory: {os.path.abspath(self.transcript_dir)}")
                 
         self.transcript_file = None
-        self.transcript_file_path = None
+        self.transcript_file_path = transcript_file if transcript_file else None
         
-        # Create a new transcript file with timestamp
-        self.create_new_transcript_file()
+        # Do not create file immediately
+        # self.create_new_transcript_file()  # Comment out immediate creation
         
         self.audio_sources = {
             "You": {
@@ -68,13 +65,13 @@ class AudioTranscriber:
 
     def create_new_transcript_file(self):
         """Create a new transcript file with timestamp in the filename"""
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        self.transcript_file_path = os.path.join(self.transcript_dir, f"transcript_{timestamp}.txt")
+        timestamp = datetime.now().isoformat(timespec='seconds').replace(':', '-')
+        self.transcript_file_path = os.path.join(self.transcript_dir, f"conversation-transcript-{timestamp}.txt")
         print(f"Saving transcript to: {self.transcript_file_path}")
         
         # Create an empty file
         with open(self.transcript_file_path, 'w') as f:
-            f.write("Transcript started at " + datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S") + " UTC\n\n")
+            f.write(f"--- Conversation Transcript (Session: {timestamp}) ---\n\n")
 
     def transcribe_audio_queue(self, speaker_queue, mic_queue):
         import queue
@@ -116,6 +113,9 @@ class AudioTranscriber:
                     print(f"Transcription error for You: {e}")
                 finally:
                     os.unlink(path)
+                    # Reset last_sample after transcription to prevent accumulation
+                    source_info["last_sample"] = bytes()
+                    source_info["new_phrase"] = True
             
             if speaker_data:
                 source_info = self.audio_sources["Speaker"]
@@ -133,6 +133,9 @@ class AudioTranscriber:
                     print(f"Transcription error for Speaker: {e}")
                 finally:
                     os.unlink(path)
+                    # Reset last_sample after transcription to prevent accumulation
+                    source_info["last_sample"] = bytes()
+                    source_info["new_phrase"] = True
             
             if pending_transcriptions:
                 pending_transcriptions.sort(key=lambda x: x[2])
@@ -171,23 +174,34 @@ class AudioTranscriber:
             wf.writeframes(data)
 
     def update_transcript(self, who_spoke, text, time_spoken):
+        if len(text.strip()) < 5:  # Skip very short fragments
+            return
         source_info = self.audio_sources[who_spoke]
         transcript = self.transcript_data[who_spoke]
         
-        # Format timestamp for display using same format as header
+        # Format timestamp
         timestamp_str = time_spoken.strftime("%Y-%m-%d %H:%M:%S")
         
         if source_info["new_phrase"] or len(transcript) == 0:
             if len(transcript) > MAX_PHRASES:
-                transcript.pop(-1)
-            transcript.insert(0, (f"{who_spoke}[{timestamp_str}]: [{text}]\n\n", time_spoken))
+                transcript.pop(0)  # Remove oldest entry (first in list)
+            # CRITICAL FIX: Append new entries at the END instead of beginning
+            # This ensures new content appears at the bottom of files where monitoring expects it
+            transcript.append((f"{who_spoke}[{timestamp_str}]: [{text}]\n\n", time_spoken))
         else:
-            transcript[0] = (f"{who_spoke}[{timestamp_str}]: [{text}]\n\n", time_spoken)
+            # Update the last entry (most recent)
+            transcript[-1] = (f"{who_spoke}[{timestamp_str}]: [{text}]\n\n", time_spoken)
+        
+        # Create file only on first valid entry
+        if not self.transcript_file_path or not os.path.exists(self.transcript_file_path):
+            self.create_new_transcript_file()
 
     def get_transcript(self):
+        # CRITICAL FIX: Use reverse=False to put oldest entries first (chronological order)
+        # This ensures that when written to file, new entries appear at the bottom
         combined_transcript = list(merge(
             self.transcript_data["You"], self.transcript_data["Speaker"], 
-            key=lambda x: x[1], reverse=True))
+            key=lambda x: x[1], reverse=False))  # Changed from reverse=True
         combined_transcript = combined_transcript[:MAX_PHRASES]
         return "".join([t[0] for t in combined_transcript])
     
@@ -205,8 +219,7 @@ class AudioTranscriber:
         self.create_new_transcript_file()
     
     def write_transcript_to_file(self):
-        """Write the current transcript to the file"""
-        if self.transcript_file_path:
-            with open(self.transcript_file_path, 'w') as f:
-                f.write("Transcript updated at " + datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S") + " UTC\n\n")
-                f.write(self.get_transcript())
+        if not self.transcript_file_path or not os.path.exists(self.transcript_file_path):
+            return  # Don't write if file not created yet
+        with open(self.transcript_file_path, 'w') as f:
+            f.write(self.get_transcript() + '\n')

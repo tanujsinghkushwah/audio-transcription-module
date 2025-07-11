@@ -30,6 +30,7 @@ class AudioTranscriptionManager extends EventEmitter {
     this.currentTranscriptFile = null;
     this.lastFileSize = 0;
     this.watchInterval = null;
+    this.seenEntries = new Set();
   }
 
   /**
@@ -41,9 +42,9 @@ class AudioTranscriptionManager extends EventEmitter {
       const isPackaged = app && app.isPackaged;
       
       if (isPackaged) {
-        return path.join(app.getPath('userData'), 'audio-transcription-module', 'transcripts');
+        return path.join(app.getPath('userData'), 'transcripts');
       } else {
-        return path.join(process.cwd(), 'audio-transcription-module', 'transcripts');
+        return path.join(process.cwd(), 'src', 'transcripts');
       }
     } catch (error) {
       // Fallback for non-electron environments
@@ -250,7 +251,17 @@ class AudioTranscriptionManager extends EventEmitter {
         shell: process.platform === 'win32'
       };
       
-      this.pythonProcess = spawn(pythonPath, [scriptPath], spawnOptions);
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const timestamp = `${year}-${month}-${day}T${hours}-${minutes}-${seconds}`;
+      const transcriptFile = `conversation-transcript-${timestamp}.txt`;
+      const transcriptPath = path.join(this.options.transcriptsDir, transcriptFile);
+      this.pythonProcess = spawn(pythonPath, [scriptPath, '--transcripts-dir', this.options.transcriptsDir, '--transcript-file', transcriptPath], spawnOptions);
       
       // Set up event handlers
       this.pythonProcess.stdout.on('data', (data) => {
@@ -370,6 +381,7 @@ class AudioTranscriptionManager extends EventEmitter {
         if (!this.currentTranscriptFile || newestFile !== this.currentTranscriptFile) {
           this.currentTranscriptFile = newestFile;
           this.lastFileSize = 0;
+          this.seenEntries.clear();  // Clear seen entries on file change
           this.emit('transcript.file.changed', { file: this.currentTranscriptFile });
         }
       }
@@ -422,6 +434,11 @@ class AudioTranscriptionManager extends EventEmitter {
       if (match && match.length >= 3) {
         const timestamp = match[1];
         const transcript = match[2].trim();
+        
+        // Create unique key for duplicate prevention
+        const entryKey = `${timestamp}:${transcript}`;
+        if (this.seenEntries.has(entryKey)) continue;
+        this.seenEntries.add(entryKey);
         
         if (transcript && transcript.length > 0) {
           // Simple question detection heuristic
